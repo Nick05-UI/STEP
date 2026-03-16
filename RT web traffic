@@ -1,0 +1,132 @@
+import java.util.*;
+
+class PageViewEvent {
+    String pageUrl;
+    String userId;
+    String source;
+
+    public PageViewEvent(String pageUrl, String userId, String source) {
+        this.pageUrl = pageUrl;
+        this.userId = userId;
+        this.source = source;
+    }
+}
+
+class AnalyticsSystem {
+
+    // page → visit count
+    private HashMap<String, Integer> pageVisits = new HashMap<>();
+
+    // page → unique users
+    private HashMap<String, Set<String>> uniqueVisitors = new HashMap<>();
+
+    // traffic source → count
+    private HashMap<String, Integer> trafficSources = new HashMap<>();
+
+
+    // Process incoming event
+    public void processEvent(PageViewEvent event) {
+
+        // Count page visits
+        pageVisits.put(
+                event.pageUrl,
+                pageVisits.getOrDefault(event.pageUrl, 0) + 1
+        );
+
+        // Track unique visitors
+        uniqueVisitors.putIfAbsent(event.pageUrl, new HashSet<>());
+        uniqueVisitors.get(event.pageUrl).add(event.userId);
+
+        // Count traffic source
+        trafficSources.put(
+                event.source,
+                trafficSources.getOrDefault(event.source, 0) + 1
+        );
+    }
+
+
+    // Get Top 10 pages
+    public List<Map.Entry<String, Integer>> getTopPages() {
+
+        List<Map.Entry<String, Integer>> list =
+                new ArrayList<>(pageVisits.entrySet());
+
+        list.sort((a, b) -> b.getValue() - a.getValue());
+
+        return list.subList(0, Math.min(10, list.size()));
+    }
+
+
+    // Display dashboard
+    public void displayDashboard() {
+
+        System.out.println("\n===== REAL-TIME ANALYTICS DASHBOARD =====");
+
+        System.out.println("\nTop Pages:");
+
+        for (Map.Entry<String, Integer> entry : getTopPages()) {
+
+            String page = entry.getKey();
+            int visits = entry.getValue();
+            int unique = uniqueVisitors.get(page).size();
+
+            System.out.println(
+                    page + " | Visits: " + visits +
+                            " | Unique Visitors: " + unique
+            );
+        }
+
+        System.out.println("\nTraffic Sources:");
+
+        for (Map.Entry<String, Integer> entry : trafficSources.entrySet()) {
+
+            System.out.println(
+                    entry.getKey() + " → " + entry.getValue()
+            );
+        }
+    }
+}
+
+public class Main {
+
+    public static void main(String[] args) throws InterruptedException {
+
+        AnalyticsSystem system = new AnalyticsSystem();
+
+        String[] pages = {
+                "/home",
+                "/politics",
+                "/sports",
+                "/technology",
+                "/business"
+        };
+
+        String[] sources = {
+                "Google",
+                "Facebook",
+                "Direct",
+                "Twitter"
+        };
+
+        Random random = new Random();
+
+        // Simulate streaming page views
+        for (int i = 1; i <= 50; i++) {
+
+            String page = pages[random.nextInt(pages.length)];
+            String user = "user" + random.nextInt(20);
+            String source = sources[random.nextInt(sources.length)];
+
+            PageViewEvent event = new PageViewEvent(page, user, source);
+
+            system.processEvent(event);
+
+            // Update dashboard every 5 events (simulate 5 seconds)
+            if (i % 5 == 0) {
+                system.displayDashboard();
+            }
+
+            Thread.sleep(500); // simulate real-time delay
+        }
+    }
+}
