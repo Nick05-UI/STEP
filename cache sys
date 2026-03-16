@@ -1,0 +1,175 @@
+import java.util.*;
+
+class Video {
+    String videoId;
+    String content;
+
+    public Video(String videoId, String content) {
+        this.videoId = videoId;
+        this.content = content;
+    }
+}
+
+class MultiLevelCache {
+
+    private static final int L1_SIZE = 10000;
+    private static final int L2_SIZE = 100000;
+
+    // L1 cache (memory)
+    private LinkedHashMap<String, Video> L1Cache =
+            new LinkedHashMap<String, Video>(L1_SIZE, 0.75f, true) {
+                protected boolean removeEldestEntry(Map.Entry<String, Video> e) {
+                    return size() > L1_SIZE;
+                }
+            };
+
+    // L2 cache (SSD simulation)
+    private LinkedHashMap<String, Video> L2Cache =
+            new LinkedHashMap<String, Video>(L2_SIZE, 0.75f, true) {
+                protected boolean removeEldestEntry(Map.Entry<String, Video> e) {
+                    return size() > L2_SIZE;
+                }
+            };
+
+    // L3 database
+    private HashMap<String, Video> database = new HashMap<>();
+
+    // access count tracking
+    private HashMap<String, Integer> accessCount = new HashMap<>();
+
+
+    // statistics
+    private int L1Hits = 0;
+    private int L2Hits = 0;
+    private int DBHits = 0;
+
+
+    // add video to database
+    public void addVideo(Video video) {
+        database.put(video.videoId, video);
+    }
+
+
+    // fetch video
+    public Video getVideo(String videoId) {
+
+        // ---------- L1 ----------
+        if (L1Cache.containsKey(videoId)) {
+
+            L1Hits++;
+            updateAccess(videoId);
+
+            System.out.println("L1 Cache Hit");
+
+            return L1Cache.get(videoId);
+        }
+
+        // ---------- L2 ----------
+        if (L2Cache.containsKey(videoId)) {
+
+            L2Hits++;
+
+            Video v = L2Cache.get(videoId);
+
+            promoteToL1(videoId, v);
+
+            updateAccess(videoId);
+
+            System.out.println("L2 Cache Hit → Promoted to L1");
+
+            return v;
+        }
+
+        // ---------- L3 ----------
+        if (database.containsKey(videoId)) {
+
+            DBHits++;
+
+            Video v = database.get(videoId);
+
+            L2Cache.put(videoId, v);
+
+            updateAccess(videoId);
+
+            System.out.println("Database Hit → Added to L2");
+
+            return v;
+        }
+
+        return null;
+    }
+
+
+    // update access count
+    private void updateAccess(String videoId) {
+
+        accessCount.put(videoId,
+                accessCount.getOrDefault(videoId, 0) + 1);
+    }
+
+
+    // promotion logic
+    private void promoteToL1(String videoId, Video video) {
+
+        if (accessCount.getOrDefault(videoId, 0) > 5) {
+
+            L1Cache.put(videoId, video);
+        }
+    }
+
+
+    // invalidate cache when content updated
+    public void invalidate(String videoId) {
+
+        L1Cache.remove(videoId);
+        L2Cache.remove(videoId);
+        database.remove(videoId);
+
+        System.out.println("Cache invalidated for video: " + videoId);
+    }
+
+
+    // show statistics
+    public void showStats() {
+
+        int total = L1Hits + L2Hits + DBHits;
+
+        System.out.println("\nCache Statistics");
+
+        System.out.println("L1 Hits: " + L1Hits);
+        System.out.println("L2 Hits: " + L2Hits);
+        System.out.println("Database Hits: " + DBHits);
+
+        System.out.println("L1 Hit Ratio: " +
+                (L1Hits * 100.0 / total) + "%");
+
+        System.out.println("L2 Hit Ratio: " +
+                (L2Hits * 100.0 / total) + "%");
+    }
+}
+
+public class Main {
+
+    public static void main(String[] args) {
+
+        MultiLevelCache cache = new MultiLevelCache();
+
+        cache.addVideo(new Video("V1", "Movie A"));
+        cache.addVideo(new Video("V2", "Movie B"));
+        cache.addVideo(new Video("V3", "Movie C"));
+
+        cache.getVideo("V1");
+        cache.getVideo("V1");
+        cache.getVideo("V1");
+        cache.getVideo("V1");
+        cache.getVideo("V1");
+        cache.getVideo("V1");
+
+        cache.getVideo("V2");
+        cache.getVideo("V3");
+
+        cache.showStats();
+
+        cache.invalidate("V1");
+    }
+}
