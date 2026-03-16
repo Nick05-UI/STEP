@@ -1,0 +1,120 @@
+import java.util.*;
+
+class DNSEntry {
+    String domain;
+    String ipAddress;
+    long expiryTime;
+
+    DNSEntry(String domain, String ipAddress, int ttlSeconds) {
+        this.domain = domain;
+        this.ipAddress = ipAddress;
+        this.expiryTime = System.currentTimeMillis() + ttlSeconds * 1000;
+    }
+
+    boolean isExpired() {
+        return System.currentTimeMillis() > expiryTime;
+    }
+}
+
+class DNSCache {
+
+    private int capacity;
+
+    // LRU using LinkedHashMap
+    private LinkedHashMap<String, DNSEntry> cache;
+
+    private int hits = 0;
+    private int misses = 0;
+
+    DNSCache(int capacity) {
+        this.capacity = capacity;
+
+        cache = new LinkedHashMap<String, DNSEntry>(capacity, 0.75f, true) {
+            protected boolean removeEldestEntry(Map.Entry<String, DNSEntry> eldest) {
+                return size() > DNSCache.this.capacity;
+            }
+        };
+    }
+
+    // Resolve domain
+    public String resolve(String domain) {
+
+        if (cache.containsKey(domain)) {
+
+            DNSEntry entry = cache.get(domain);
+
+            if (!entry.isExpired()) {
+                hits++;
+                System.out.println("Cache HIT → " + entry.ipAddress);
+                return entry.ipAddress;
+            } else {
+                System.out.println("Cache EXPIRED → removing");
+                cache.remove(domain);
+            }
+        }
+
+        misses++;
+
+        String ip = queryUpstreamDNS(domain);
+
+        DNSEntry entry = new DNSEntry(domain, ip, 300);
+        cache.put(domain, entry);
+
+        System.out.println("Cache MISS → Query upstream → " + ip);
+
+        return ip;
+    }
+
+    // Simulate upstream DNS lookup
+    private String queryUpstreamDNS(String domain) {
+
+        try {
+            Thread.sleep(100); // simulate 100ms network delay
+        } catch (Exception e) {}
+
+        Random rand = new Random();
+
+        return "172.217.14." + rand.nextInt(255);
+    }
+
+    // Remove expired entries
+    public void cleanExpiredEntries() {
+
+        Iterator<Map.Entry<String, DNSEntry>> it = cache.entrySet().iterator();
+
+        while (it.hasNext()) {
+            Map.Entry<String, DNSEntry> entry = it.next();
+
+            if (entry.getValue().isExpired()) {
+                it.remove();
+            }
+        }
+    }
+
+    // Cache statistics
+    public void getCacheStats() {
+
+        int total = hits + misses;
+
+        double hitRate = total == 0 ? 0 : ((double) hits / total) * 100;
+
+        System.out.println("Cache Hits: " + hits);
+        System.out.println("Cache Misses: " + misses);
+        System.out.println("Hit Rate: " + hitRate + "%");
+    }
+}
+
+public class DNSCacheSystem {
+
+    public static void main(String[] args) {
+
+        DNSCache cache = new DNSCache(5);
+
+        cache.resolve("google.com");
+        cache.resolve("google.com");
+        cache.resolve("openai.com");
+        cache.resolve("google.com");
+
+        cache.getCacheStats();
+    }
+}
